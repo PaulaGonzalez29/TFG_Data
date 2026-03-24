@@ -50,25 +50,21 @@ def leer_desarrollo_wb(ruta_archivo, nombre_variable):
     if df is None:
         raise ValueError(f"No se pudo leer correctamente el archivo {ruta_archivo}")
 
-    # Renombrar columna clave
     df = df.rename(columns={"Country Code": "country_code"})
+    df["country_code"] = df["country_code"].astype(str).str.strip().str.upper()
 
-    # Eliminar columnas innecesarias
     df = df.drop(columns=["Country Name", "Indicator Name", "Indicator Code"], errors="ignore")
 
-    # Pasar de ancho a largo
     df = df.melt(
         id_vars=["country_code"],
         var_name="year",
         value_name=nombre_variable
     )
 
-    # Limpiar year
     df["year"] = pd.to_numeric(df["year"], errors="coerce")
     df = df.dropna(subset=["year"])
     df["year"] = df["year"].astype(int)
 
-    # Limpiar valor
     df[nombre_variable] = pd.to_numeric(df[nombre_variable], errors="coerce")
 
     return df
@@ -78,27 +74,70 @@ def leer_desarrollo_wb(ruta_archivo, nombre_variable):
 # LECTURA DE HDI LIMPIO
 # --------------------------------------------------
 def leer_hdi_limpio(ruta_archivo, nombre_variable):
-    df = pd.read_csv(ruta_archivo, encoding="utf-8-sig")
+    configuraciones = [
+        {"sep": ",", "encoding": "utf-8-sig"},
+        {"sep": ";", "encoding": "utf-8-sig"},
+        {"sep": ",", "encoding": "latin1"},
+        {"sep": ";", "encoding": "latin1"}
+    ]
 
-    df.columns = [str(col).strip().replace("\ufeff", "") for col in df.columns]
+    df = None
+
+    for config in configuraciones:
+        try:
+            temp = pd.read_csv(
+                ruta_archivo,
+                sep=config["sep"],
+                engine="python",
+                encoding=config["encoding"]
+            )
+            temp.columns = [str(col).strip().replace("\ufeff", "") for col in temp.columns]
+            if len(temp.columns) >= 3:
+                df = temp.copy()
+                break
+        except Exception:
+            continue
+
+    if df is None:
+        raise ValueError(f"No se pudo leer correctamente el archivo {ruta_archivo}")
+
+    # Renombrar posibles columnas del código país
+    if "country_code" not in df.columns:
+        if "iso3" in df.columns:
+            df = df.rename(columns={"iso3": "country_code"})
+        elif "iso_code" in df.columns:
+            df = df.rename(columns={"iso_code": "country_code"})
+        elif "Country Code" in df.columns:
+            df = df.rename(columns={"Country Code": "country_code"})
+        elif "geoUnit" in df.columns:
+            df = df.rename(columns={"geoUnit": "country_code"})
+
+    # Renombrar posibles columnas del valor HDI
+    if "hdi" not in df.columns:
+        if "HDI" in df.columns:
+            df = df.rename(columns={"HDI": "hdi"})
+        elif "value" in df.columns:
+            df = df.rename(columns={"value": "hdi"})
+        elif "OBS_VALUE" in df.columns:
+            df = df.rename(columns={"OBS_VALUE": "hdi"})
 
     columnas_esperadas = ["country_code", "year", "hdi"]
     for col in columnas_esperadas:
         if col not in df.columns:
-            raise ValueError(f"En {ruta_archivo} falta la columna '{col}'")
+            raise ValueError(
+                f"En {ruta_archivo} falta la columna '{col}'. "
+                f"Columnas detectadas: {df.columns.tolist()}"
+            )
 
-    # Renombrar hdi al nombre de variable definido en el diccionario
     df = df.rename(columns={"hdi": nombre_variable})
-
-    # Quedarnos solo con lo necesario
     df = df[["country_code", "year", nombre_variable]].copy()
 
-    # Limpiar tipos
     df["country_code"] = df["country_code"].astype(str).str.strip().str.upper()
     df["year"] = pd.to_numeric(df["year"], errors="coerce")
     df[nombre_variable] = pd.to_numeric(df[nombre_variable], errors="coerce")
 
-    df = df.dropna(subset=["year"])
+    df = df.dropna(subset=["country_code", "year"])
+    df = df[df["country_code"].str.match(r"^[A-Z]{3}$", na=False)]
     df["year"] = df["year"].astype(int)
 
     return df
@@ -123,7 +162,7 @@ for archivo, nombre_variable in archivos_variables.items():
             df = leer_desarrollo_wb(ruta_archivo, nombre_variable)
 
         lista_dfs.append(df)
-        print(f"OK: {archivo} -> {nombre_variable}")
+        print(f"OK: {archivo} -> {nombre_variable} | filas: {len(df)}")
 
     except Exception as e:
         print(f"Error en {archivo}: {e}")
@@ -147,9 +186,9 @@ for df in lista_dfs[1:]:
 df_desarrollo["country_code"] = df_desarrollo["country_code"].astype(str).str.strip().str.upper()
 df_desarrollo["year"] = pd.to_numeric(df_desarrollo["year"], errors="coerce")
 df_desarrollo = df_desarrollo.dropna(subset=["country_code", "year"])
+df_desarrollo = df_desarrollo[df_desarrollo["country_code"].str.match(r"^[A-Z]{3}$", na=False)]
 df_desarrollo["year"] = df_desarrollo["year"].astype(int)
 
-# Ordenar para revisar mejor
 df_desarrollo = df_desarrollo.sort_values(by=["country_code", "year"]).reset_index(drop=True)
 
 
@@ -161,6 +200,11 @@ print(df_desarrollo.head())
 
 print("\nColumnas del dataset final:")
 print(df_desarrollo.columns.tolist())
+
+if "hdi" in df_desarrollo.columns:
+    print("\nValores no nulos en hdi:", df_desarrollo["hdi"].notna().sum())
+else:
+    print("\nLa columna hdi no está en el dataset final.")
 
 print("\nInformación general:")
 print(df_desarrollo.info())

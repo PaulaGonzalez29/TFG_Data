@@ -71,11 +71,34 @@ def leer_educacion_wb(ruta_archivo, nombre_variable):
 # Función para leer archivos en formato largo tipo:
 # indicatorId | geoUnit | year | value
 def leer_educacion_corregido(ruta_archivo, nombre_variable):
-    # probar primero con separador coma
-    try:
-        df = pd.read_csv(ruta_archivo)
-    except:
-        df = pd.read_csv(ruta_archivo, sep=";", engine="python", encoding="latin1")
+    dfs_posibles = []
+
+    for sep in [",", ";"]:
+        for encoding in ["utf-8-sig", "latin1"]:
+            try:
+                df_temp = pd.read_csv(
+                    ruta_archivo,
+                    sep=sep,
+                    engine="python",
+                    encoding=encoding
+                )
+                dfs_posibles.append(df_temp)
+            except:
+                pass
+
+    if len(dfs_posibles) == 0:
+        raise ValueError(f"No se pudo leer el archivo {ruta_archivo}")
+
+    # Elegir el dataframe que sí tenga columnas útiles
+    df = None
+    for df_temp in dfs_posibles:
+        columnas = [str(col).strip().replace("\ufeff", "") for col in df_temp.columns]
+        if "geoUnit" in columnas or "Country Code" in columnas:
+            df = df_temp.copy()
+            break
+
+    if df is None:
+        df = dfs_posibles[0].copy()
 
     df.columns = [str(col).strip().replace("\ufeff", "") for col in df.columns]
 
@@ -91,7 +114,10 @@ def leer_educacion_corregido(ruta_archivo, nombre_variable):
 
     # Comprobar columnas mínimas
     if "country_code" not in df.columns:
-        raise ValueError(f"No se encontró ni 'Country Code' ni 'geoUnit' en {ruta_archivo}")
+        raise ValueError(
+            f"No se encontró ni 'Country Code' ni 'geoUnit' en {ruta_archivo}. "
+            f"Columnas detectadas: {list(df.columns)}"
+        )
     if "year" not in df.columns:
         raise ValueError(f"No se encontró la columna 'year' en {ruta_archivo}")
     if nombre_variable not in df.columns:
