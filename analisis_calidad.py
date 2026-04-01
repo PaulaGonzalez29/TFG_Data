@@ -9,13 +9,13 @@ import matplotlib.pyplot as plt
 #Direcciones y nombres de datasets
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-RUTA_ENTRADA = os.path.join(BASE_DIR, "Dataset_Final", "dataset_transversal_2023.csv")
+RUTA_ENTRADA = os.path.join(BASE_DIR, "Dataset_Final", "dataset_limpio_2023.csv")
 RUTA_SALIDA = os.path.join(BASE_DIR, "Analisis_Calidad")
 os.makedirs(RUTA_SALIDA, exist_ok=True)
 
-RUTA_RESUMEN_VARIABLES = os.path.join(RUTA_SALIDA, "resumen_calidad_variables.csv")
-RUTA_RESUMEN_PAISES = os.path.join(RUTA_SALIDA, "resumen_nulos_paises.csv")
-RUTA_CORRELACIONES = os.path.join(RUTA_SALIDA, "correlaciones_altas.csv")
+RUTA_RESUMEN_VARIABLES = os.path.join(RUTA_SALIDA, "resumen_calidad_variables_Limpio.csv")
+RUTA_RESUMEN_PAISES = os.path.join(RUTA_SALIDA, "resumen_nulos_paises_Limpio.csv")
+RUTA_CORRELACIONES = os.path.join(RUTA_SALIDA, "correlaciones_altas_Limpio.csv")
 
 #Límite establecido para decidir datos problemáticos o de baja calidad
 # Umbrales
@@ -215,90 +215,3 @@ print(f"Resumen de países:    {RUTA_RESUMEN_PAISES}")
 print(f"Correlaciones altas:  {RUTA_CORRELACIONES}")
 print("=" * 70)
 
-# GRÁFICOS NECESARIOS
-# 1. Top variables con más nulos
-serie_columnas = nulos_col.sort_values(ascending=False)
-guardar_grafico_barras(
-    serie=serie_columnas,
-    titulo="Top variables con mayor porcentaje de nulos",
-    xlabel="Variable",
-    ylabel="% de nulos",
-    ruta_archivo=os.path.join(RUTA_SALIDA, "top_variables_mas_nulas.png"),
-    top_n=20
-)
-# 2. Top países con más nulos
-serie_paises = pd.Series(nulos_pais.values, index=df["country_code"]).sort_values(ascending=False)
-guardar_grafico_barras(
-    serie=serie_paises,
-    titulo="Top países con mayor porcentaje de nulos",
-    xlabel="País",
-    ylabel="% de nulos",
-    ruta_archivo=os.path.join(RUTA_SALIDA, "top_paises_mas_nulos.png"),
-    top_n=20
-)
-# 3. Mapa de calor de nulos
-plt.figure(figsize=(18, 10))
-matriz_nulos = df[columnas_analisis].isnull().astype(int)
-
-plt.imshow(matriz_nulos, aspect="auto")
-plt.colorbar(label="Nulos (1 = sí, 0 = no)")
-plt.title("Heatmap de valores nulos")
-plt.xlabel("Variables")
-plt.ylabel("Países")
-plt.xticks(range(len(columnas_analisis)), columnas_analisis, rotation=90)
-plt.yticks([])
-plt.tight_layout()
-
-ruta_heatmap = os.path.join(RUTA_SALIDA, "heatmap_nulos.png")
-plt.savefig(ruta_heatmap, dpi=300, bbox_inches="tight")
-plt.close()
-print(f"Gráfico guardado: {ruta_heatmap}")
-
-# 4. Matriz de correlación solo para variables numéricas
-if len(columnas_numericas) >= 2:
-    corr = df[columnas_numericas].corr()
-
-    plt.figure(figsize=(16, 12))
-    plt.imshow(corr, aspect="auto")
-    plt.colorbar()
-    plt.xticks(range(len(corr.columns)), corr.columns, rotation=90)
-    plt.yticks(range(len(corr.columns)), corr.columns)
-    plt.title("Matriz de correlación")
-    plt.tight_layout()
-
-    ruta_corr = os.path.join(RUTA_SALIDA, "matriz_correlacion.png")
-    plt.savefig(ruta_corr, dpi=300, bbox_inches="tight")
-    plt.close()
-    print(f"Gráfico guardado: {ruta_corr}")
-
-# 5. Histogramas y boxplots solo de variables numéricas
-ruta_hist = os.path.join(RUTA_SALIDA, "Histogramas")
-ruta_box = os.path.join(RUTA_SALIDA, "Boxplots")
-os.makedirs(ruta_hist, exist_ok=True)
-os.makedirs(ruta_box, exist_ok=True)
-
-for col in columnas_numericas:
-    serie = df[col].dropna()
-    if len(serie) == 0:
-        continue
-
-    plt.figure(figsize=(10, 6))
-    plt.hist(serie, bins=20)
-    plt.title(f"Histograma - {col}")
-    plt.xlabel(col)
-    plt.ylabel("Frecuencia")
-    plt.tight_layout()
-    ruta_archivo_hist = os.path.join(ruta_hist, f"hist_{col}.png")
-    plt.savefig(ruta_archivo_hist, dpi=300, bbox_inches="tight")
-    plt.close()
-
-    plt.figure(figsize=(8, 6))
-    plt.boxplot(serie, vert=True)
-    plt.title(f"Boxplot - {col}")
-    plt.ylabel(col)
-    plt.tight_layout()
-    ruta_archivo_box = os.path.join(ruta_box, f"boxplot_{col}.png")
-    plt.savefig(ruta_archivo_box, dpi=300, bbox_inches="tight")
-    plt.close()
-
-print("\nProceso completado correctamente.")

@@ -1,23 +1,28 @@
 import pandas as pd
 import os
 
-# Carpeta donde está este script
+# =========================================================
+# RUTAS
+# =========================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Posibles ubicaciones de los archivos
 RUTAS_POSIBLES = [
     BASE_DIR,
     os.path.join(BASE_DIR, "Datos TFG")
 ]
 
-# Archivos unificados de entrada
+# =========================================================
+# ARCHIVOS DE ENTRADA
+# =========================================================
 archivos_datasets = {
     "dataset_educacion_unificado.csv": "educacion",
     "dataset_desarrollo_unificado.csv": "desarrollo",
     "dataset_electrificacion_unificado.csv": "electrificacion"
 }
 
-# Lista de regiones / agregados que queremos excluir
+# =========================================================
+# REGIONES / AGREGADOS A EXCLUIR
+# =========================================================
 REGIONES_EXCLUIR = {
     "AFE", "AFW", "ARB", "CEB", "CSS", "EAP", "EAR", "EAS", "ECA", "ECS",
     "EMU", "EUU", "FCS", "HIC", "HPC", "IBD", "IBT", "IDA", "IDB", "IDX",
@@ -26,22 +31,26 @@ REGIONES_EXCLUIR = {
     "SST", "TEA", "TEC", "TLA", "TMN", "TSA", "TSS", "UMC", "WLD"
 }
 
+# =========================================================
+# FUNCIÓN PARA BUSCAR ARCHIVOS
+# =========================================================
 def buscar_archivo(nombre_archivo):
-    """Busca un archivo en las rutas posibles."""
     for ruta_base in RUTAS_POSIBLES:
         ruta_completa = os.path.join(ruta_base, nombre_archivo)
         if os.path.exists(ruta_completa):
             return ruta_completa
     return None
 
-def leer_dataset_2023(ruta_archivo, nombre_dataset):
-    """Carga un dataset, normaliza columnas, elimina regiones y se queda solo con 2023."""
+# =========================================================
+# FUNCIÓN PARA LEER Y LIMPIAR CADA DATASET HISTÓRICO
+# =========================================================
+def leer_dataset_historico(ruta_archivo, nombre_dataset):
     df = pd.read_csv(ruta_archivo)
 
     # Normalizar nombres de columnas
     df.columns = [str(col).strip().replace("\ufeff", "") for col in df.columns]
 
-    # Renombrar columnas si hiciera falta
+    # Renombrar columnas si hace falta
     renombrados = {
         "Country Code": "country_code",
         "Country code": "country_code",
@@ -75,14 +84,14 @@ def leer_dataset_2023(ruta_archivo, nombre_dataset):
     df = df[df["country_code"] != ""]
     df = df[df["country_code"].str.lower() != "nan"]
 
-    # Eliminar regiones / agregados
+    # Eliminar regiones/agregados
     filas_antes = len(df)
     df = df[~df["country_code"].isin(REGIONES_EXCLUIR)].copy()
     filas_despues = len(df)
     filas_eliminadas = filas_antes - filas_despues
 
     if filas_eliminadas > 0:
-        print(f"\nEn {nombre_dataset} se eliminaron {filas_eliminadas} filas correspondientes a regiones/agregados.")
+        print(f"\nEn {nombre_dataset} se eliminaron {filas_eliminadas} filas de regiones/agregados.")
 
     # Mantener solo códigos ISO de 3 letras
     df = df[df["country_code"].str.len() == 3].copy()
@@ -92,17 +101,11 @@ def leer_dataset_2023(ruta_archivo, nombre_dataset):
     df = df.dropna(subset=["year"])
     df["year"] = df["year"].astype(int)
 
-    # Filtrar solo 2023
-    df = df[df["year"] == 2023].copy()
-
-    if df.empty:
-        raise ValueError(f"El dataset {nombre_dataset} no tiene datos para 2023.")
-
-    # Eliminar columnas de texto que puedan duplicar información
+    # Eliminar columnas de texto que no aportan
     columnas_eliminar = ["Country Name", "country_name", "dataset", "fuente"]
     df = df.drop(columns=columnas_eliminar, errors="ignore")
 
-    # No incluir columnas vacías en 2023
+    # Eliminar columnas completamente vacías
     columnas_validas = ["country_code", "year"]
     columnas_excluidas = []
 
@@ -118,15 +121,31 @@ def leer_dataset_2023(ruta_archivo, nombre_dataset):
     df = df[columnas_validas]
 
     if columnas_excluidas:
-        print(f"\nColumnas no incluidas en {nombre_dataset} por estar vacías en 2023:")
+        print(f"\nColumnas no incluidas en {nombre_dataset} por estar completamente vacías:")
         for col in columnas_excluidas:
             print(f"- {col}")
 
-    # Eliminar duplicados por país si existen
-    df = df.drop_duplicates(subset=["country_code"], keep="first")
+    # Eliminar duplicados exactos de país-año
+    df = df.drop_duplicates(subset=["country_code", "year"], keep="first")
+
+    # Añadir prefijo a variables
+    columnas_renombrar = {}
+    for col in df.columns:
+        if col not in ["country_code", "year"]:
+            if nombre_dataset == "educacion":
+                columnas_renombrar[col] = f"edu_{col}"
+            elif nombre_dataset == "desarrollo":
+                columnas_renombrar[col] = f"des_{col}"
+            elif nombre_dataset == "electrificacion":
+                columnas_renombrar[col] = f"elec_{col}"
+
+    df = df.rename(columns=columnas_renombrar)
 
     return df
 
+# =========================================================
+# CARGAR DATASETS
+# =========================================================
 lista_dfs = []
 
 for archivo, nombre_dataset in archivos_datasets.items():
@@ -137,23 +156,10 @@ for archivo, nombre_dataset in archivos_datasets.items():
         continue
 
     try:
-        df = leer_dataset_2023(ruta_archivo, nombre_dataset)
-
-        # Prefijo a las variables para distinguir bloques
-        columnas_renombrar = {}
-        for col in df.columns:
-            if col not in ["country_code", "year"]:
-                if nombre_dataset == "educacion":
-                    columnas_renombrar[col] = f"edu_{col}"
-                elif nombre_dataset == "desarrollo":
-                    columnas_renombrar[col] = f"des_{col}"
-                elif nombre_dataset == "electrificacion":
-                    columnas_renombrar[col] = f"elec_{col}"
-
-        df = df.rename(columns=columnas_renombrar)
-
+        df = leer_dataset_historico(ruta_archivo, nombre_dataset)
         lista_dfs.append(df)
         print(f"OK: {archivo} -> {ruta_archivo}")
+        print(f"Dimensión de {nombre_dataset}: {df.shape}")
 
     except Exception as e:
         print(f"Error en {archivo}: {e}")
@@ -161,28 +167,40 @@ for archivo, nombre_dataset in archivos_datasets.items():
 if len(lista_dfs) == 0:
     raise ValueError("No se ha podido cargar ningún dataset.")
 
-# Unir todos los datasets por country_code y year
+# =========================================================
+# UNIFICAR DATASETS POR PAÍS Y AÑO
+# =========================================================
 df_final = lista_dfs[0]
 
 for df in lista_dfs[1:]:
     df_final = df_final.merge(df, on=["country_code", "year"], how="outer")
 
-# Eliminar filas sin country_code
-df_final = df_final.dropna(subset=["country_code"])
+# =========================================================
+# LIMPIEZA FINAL
+# =========================================================
+df_final = df_final.dropna(subset=["country_code", "year"])
+
 df_final["country_code"] = df_final["country_code"].astype(str).str.strip().str.upper()
 df_final = df_final[df_final["country_code"] != ""]
 df_final = df_final[df_final["country_code"].str.lower() != "nan"]
 
-# Seguridad extra: volver a eliminar regiones si quedara alguna
-df_final = df_final[~df_final["country_code"].isin(REGIONES_EXCLUIR)].copy()
+df_final["year"] = pd.to_numeric(df_final["year"], errors="coerce")
+df_final = df_final.dropna(subset=["year"])
+df_final["year"] = df_final["year"].astype(int)
 
-# Eliminar duplicados finales
-df_final = df_final.drop_duplicates(subset=["country_code"], keep="first")
+# Seguridad extra
+df_final = df_final[~df_final["country_code"].isin(REGIONES_EXCLUIR)].copy()
+df_final = df_final[df_final["country_code"].str.len() == 3].copy()
+
+# Eliminar duplicados finales por país-año
+df_final = df_final.drop_duplicates(subset=["country_code", "year"], keep="first")
 
 # Ordenar
-df_final = df_final.sort_values("country_code").reset_index(drop=True)
+df_final = df_final.sort_values(["country_code", "year"]).reset_index(drop=True)
 
-# Revisar resultado
+# =========================================================
+# REVISIÓN FINAL
+# =========================================================
 print("\nPrimeras filas:")
 print(df_final.head())
 
@@ -192,14 +210,22 @@ print(df_final.info())
 print("\nDimensión final:")
 print(df_final.shape)
 
+print("\nAños disponibles:")
+print(sorted(df_final["year"].unique()))
+
+print("\nNúmero de países únicos:")
+print(df_final["country_code"].nunique())
+
 print("\nPorcentaje de nulos por columna:")
 print((df_final.isnull().mean() * 100).round(2).sort_values(ascending=False))
 
-# Guardar dataset final
+# =========================================================
+# GUARDAR DATASET FINAL
+# =========================================================
 ruta_salida = os.path.join(BASE_DIR, "Dataset_Final")
 os.makedirs(ruta_salida, exist_ok=True)
 
-archivo_salida = os.path.join(ruta_salida, "dataset_dataset_transversal_2023.csv")
-df_final.to_csv(archivo_salida, index=False)
+archivo_salida = os.path.join(ruta_salida, "dataset_unificado.csv")
+df_final.to_csv(archivo_salida, index=False, encoding="utf-8-sig")
 
 print(f"\nArchivo guardado como: {archivo_salida}")
