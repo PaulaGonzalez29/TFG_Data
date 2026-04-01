@@ -1,6 +1,6 @@
-import pandas as pd
-import numpy as np
 import os
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 # =========================================================
@@ -13,69 +13,44 @@ RUTA_ENTRADA = os.path.join(BASE_DIR, "Dataset_Final", "dataset_transversal_2023
 RUTA_SALIDA = os.path.join(BASE_DIR, "Analisis_Calidad")
 os.makedirs(RUTA_SALIDA, exist_ok=True)
 
-RUTA_CSV_FINAL = os.path.join(RUTA_SALIDA, "analisis_calidad_completo.csv")
+RUTA_RESUMEN_VARIABLES = os.path.join(RUTA_SALIDA, "resumen_calidad_variables.csv")
+RUTA_RESUMEN_PAISES = os.path.join(RUTA_SALIDA, "resumen_nulos_paises.csv")
+RUTA_CORRELACIONES = os.path.join(RUTA_SALIDA, "correlaciones_altas.csv")
 
 #Límite establecido para decidir datos problemáticos o de baja calidad
-#Variable global
+# Umbrales
+UMBRAL_NULOS_COLUMNAS = 40
 UMBRAL_NULOS_PAISES = 70
-UMBRAL_NULOS_COLUMNAS = 70
+UMBRAL_VARIANZA_BAJA = 1e-6
+UMBRAL_CORRELACION_ALTA = 0.85
 
 # =========================================================
 # FUNCIONES AUXILIARES
 # =========================================================
-#Añadir filas a nuestro csv de análisis de calidad
-def agregar_fila(lista_resultados, tipo_analisis, grupo, variable, valor, detalle=""):
-    lista_resultados.append({
-        "tipo_analisis": tipo_analisis,
-        "grupo": grupo,
-        "variable": variable,
-        "valor": valor,
-        "detalle": detalle
-    })
-
 #Cálculo de outliers
-def calcular_outliers_iqr(df, columnas_numericas):
-    resultados = []
+def calcular_outliers_iqr(serie: pd.Series) -> tuple[int, float]:
+    serie = serie.dropna()
+    if len(serie) == 0:
+        return 0, 0.0
 
-    for col in columnas_numericas:
-        serie = df[col].dropna()
+    q1 = serie.quantile(0.25)
+    q3 = serie.quantile(0.75)
+    iqr = q3 - q1
 
-        if len(serie) == 0:
-            continue
+    if iqr == 0:
+        return 0, 0.0
 
-        q1 = serie.quantile(0.25)
-        q3 = serie.quantile(0.75)
-        iqr = q3 - q1
+    limite_inferior = q1 - 1.5 * iqr
+    limite_superior = q3 + 1.5 * iqr
 
-        if iqr == 0:
-            n_outliers = 0
-            pct_outliers = 0.0
-            lower = q1
-            upper = q3
-        else:
-            lower = q1 - 1.5 * iqr
-            upper = q3 + 1.5 * iqr
-            mask_outliers = (serie < lower) | (serie > upper)
-            n_outliers = int(mask_outliers.sum())
-            pct_outliers = round((n_outliers / len(serie)) * 100, 2)
+    n_outliers = int(((serie < limite_inferior) | (serie > limite_superior)).sum())
+    pct_outliers = round((n_outliers / len(serie)) * 100, 2)
 
-        resultados.append({
-            "variable": col,
-            "q1": round(float(q1), 4),
-            "q3": round(float(q3), 4),
-            "iqr": round(float(iqr), 4),
-            "limite_inferior": round(float(lower), 4),
-            "limite_superior": round(float(upper), 4),
-            "n_outliers": n_outliers,
-            "pct_outliers": pct_outliers
-        })
-
-    return resultados
+    return n_outliers, pct_outliers
 
 #Gráficos
-def guardar_grafico_barras(serie, titulo, xlabel, ylabel, nombre_archivo, top_n=None):
+def guardar_grafico_barras(serie, titulo, xlabel, ylabel, ruta_archivo, top_n=None):
     datos = serie.copy()
-
     if top_n is not None:
         datos = datos.head(top_n)
 
@@ -86,31 +61,28 @@ def guardar_grafico_barras(serie, titulo, xlabel, ylabel, nombre_archivo, top_n=
     plt.ylabel(ylabel)
     plt.xticks(rotation=90)
     plt.tight_layout()
-
-    ruta = os.path.join(RUTA_SALIDA, nombre_archivo)
-    plt.savefig(ruta, dpi=300, bbox_inches="tight")
+    plt.savefig(ruta_archivo, dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"Gráfico guardado: {ruta}")
+    print(f"Gráfico guardado: {ruta_archivo}")
+
 
 # Cargar dataset y leer
 if not os.path.exists(RUTA_ENTRADA):
     raise FileNotFoundError(f"No se encontró el archivo:\n{RUTA_ENTRADA}")
 
 df = pd.read_csv(RUTA_ENTRADA)
-
 print("\nDataset cargado correctamente.")
 print("Dimensión inicial:", df.shape)
 
 # LIMPIEZA BÁSICA
-
 df.columns = [str(c).strip().replace("\ufeff", "") for c in df.columns]
 
 #Revisar que hay tanto código de país como año
 if "country_code" not in df.columns:
     raise ValueError("Falta la columna 'country_code' en el dataset.")
 
-if "year" not in df.columns:
-    raise ValueError("Falta la columna 'year' en el dataset.")
+if "year" in df.columns:
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
 
 #Convertir a texto, eliminar espacios y poner en mayúsculas. Evitar varios códigos
 #de países iguales pero en distintos formatos
@@ -120,221 +92,171 @@ df = df[df["country_code"].notna()]
 df = df[df["country_code"] != ""]
 df = df[df["country_code"].str.lower() != "nan"]
 
-#Convertir valores de años a números, y eliminar 
-df["year"] = pd.to_numeric(df["year"], errors="coerce")
-df = df.dropna(subset=["year"])
-df["year"] = df["year"].astype(int)
-
 #Revisar duplicados de países y eliminar
 duplicados_country = int(df.duplicated(subset=["country_code"]).sum())
-df = df.drop_duplicates(subset=["country_code"], keep="first").copy()
+if duplicados_country > 0:
+    print(f"Se detectaron {duplicados_country} países duplicados. Se conserva la primera fila.")
+    df = df.drop_duplicates(subset=["country_code"], keep="first").copy()
 
-print("Dimensión tras limpieza básica:", df.shape)
+print("Dimensión tras primera limpieza de posibles errores:", df.shape)
 
 # =========================================================
 # ANÁLISIS
 # =========================================================
+columnas_excluir = ["country_code", "year"]
+columnas_analisis = [c for c in df.columns if c not in columnas_excluir]
 
-resultados = []
+columnas_numericas = df[columnas_analisis].select_dtypes(include=[np.number]).columns.tolist()
 
-# ------------------------------------
-# 1. INFORMACIÓN GENERAL DEL DATASET
-# ------------------------------------
-agregar_fila(resultados, "info_general", "dataset", "n_filas", df.shape[0])
-agregar_fila(resultados, "info_general", "dataset", "n_columnas", df.shape[1])
-agregar_fila(resultados, "info_general", "dataset", "n_paises_unicos", df["country_code"].nunique())
-agregar_fila(resultados, "info_general", "dataset", "duplicados_country_code_detectados", duplicados_country)
+print(f"Número de variables analizadas: {len(columnas_analisis)}")
+print(f"Número de variables numéricas: {len(columnas_numericas)}")
 
-# -----------------------------------
-# 2. PORCENTAJE DE NULOS POR COLUMNA
-# -----------------------------------
-#Cálculo de nulos
-nulos_col = (df.isnull().mean() * 100).round(2)
-#Agregar resultado
-for col in df.columns:
-    agregar_fila(resultados, "nulos_porcentaje_columna", "columna", col, float(nulos_col[col]))
+# 1. NULOS POR VARIABLE
+nulos_col = (df[columnas_analisis].isnull().mean() * 100).round(2)
 
-#Revisar si consideramos que hay columnas problemáticas, >70%
-for col in df.columns:
-    if nulos_col[col] >= UMBRAL_NULOS_COLUMNAS:
-        agregar_fila(
-            resultados,
-            "columnas_problematicas",
-            "columna",
-            col,
-            float(nulos_col[col])
-        )
+# 2. NULOS POR PAÍS
+nulos_pais = (df[columnas_analisis].isnull().mean(axis=1) * 100).round(2)
+df_paises = pd.DataFrame({
+    "country_code": df["country_code"],
+    "pct_nulos": nulos_pais,
+    "pais_problematico": nulos_pais >= UMBRAL_NULOS_PAISES
+}).sort_values(by="pct_nulos", ascending=False)
 
-# -------------------------
-# 3. NULOS POR PAÍS
-# -------------------------
-#Mismos pasos que en el código anterior, pero analizando posibles países problemáticos
-columnas_analisis = [col for col in df.columns if col not in ["country_code", "year"]]
+# 3. VARIANZA Y DESVIACIÓN TÍPICA
+varianzas = df[columnas_numericas].var(numeric_only=True)
+stds = df[columnas_numericas].std(numeric_only=True)
 
-nulos_pais = df[columnas_analisis].isnull().mean(axis=1).mul(100).round(2)
+# 4. OUTLIERS POR VARIABLE
+outliers_info = {}
+for col in columnas_numericas:
+    n_outliers, pct_outliers = calcular_outliers_iqr(df[col])
+    outliers_info[col] = {
+        "n_outliers": n_outliers,
+        "pct_outliers": pct_outliers
+    }
 
-for i, row in df.iterrows():
-    pais = row["country_code"]
+# 5. CORRELACIONES
+#Nos centramos en correlaciones altas
+correlaciones_altas = []
+variables_con_corr_alta = set()
 
-    agregar_fila(resultados, "nulos_pais", pais, "porcentaje_nulos", float(nulos_pais.loc[i]))
-    agregar_fila(resultados, "n_variables_analizadas_pais", pais, "n_variables_analizadas", len(columnas_analisis))
+if len(columnas_numericas) >= 2:
+    corr = df[columnas_numericas].corr().abs()
 
-    if nulos_pais.loc[i] >= UMBRAL_NULOS_PAISES:
-        agregar_fila(
-            resultados,
-            "paises_problematicos",
-            pais,
-            "porcentaje_nulos",
-            float(nulos_pais.loc[i])
-        )
+    for i in range(len(corr.columns)):
+        for j in range(i + 1, len(corr.columns)):
+            var_1 = corr.columns[i]
+            var_2 = corr.columns[j]
+            valor_corr = corr.iloc[i, j]
 
-# -------------------------
-# 4. DUPLICADOS
-# -------------------------
-#Revisión de filas duplicadas y posibles países duplicadas
-duplicados_totales = int(df.duplicated().sum())
-agregar_fila(resultados, "duplicados", "dataset", "duplicados_totales", duplicados_totales)
-agregar_fila(resultados, "duplicados", "dataset", "duplicados_country_code", int(df.duplicated(subset=["country_code"]).sum()))
+            if pd.notna(valor_corr) and valor_corr >= UMBRAL_CORRELACION_ALTA:
+                correlaciones_altas.append({
+                    "variable_1": var_1,
+                    "variable_2": var_2,
+                    "correlacion_abs": round(float(valor_corr), 4)
+                })
+                variables_con_corr_alta.add(var_1)
+                variables_con_corr_alta.add(var_2)
 
-# -------------------------
-# 5. VALORES ÚNICOS
-# -------------------------
-columnas_numericas = df.select_dtypes(include=[np.number]).columns.tolist()
-columnas_numericas = [c for c in columnas_numericas if c != "year"]
+df_corr_altas = pd.DataFrame(correlaciones_altas).sort_values(
+    by="correlacion_abs", ascending=False
+) if correlaciones_altas else pd.DataFrame(columns=["variable_1", "variable_2", "correlacion_abs"])
 
-agregar_fila(resultados, "resumen_variables_numericas", "dataset", "n_variables_numericas", len(columnas_numericas))
+# 6. RESUMEN FINAL POR VARIABLE
+resumen_variables = []
 
-# -----------------------------------------------------------------------------
-# 6. ESTADÍSTICAS PRINCIPALES (MEDIA, MEDIANA, MIN, MAX Y DESVIACIÓN ESTÁNDAR)
-# -----------------------------------------------------------------------------
-#Los representaremos en gráficas para analizar
-n_columnas_problematicas = int((nulos_col >= UMBRAL_NULOS_COLUMNAS).sum())
-n_paises_problematicos = int((nulos_pais >= UMBRAL_NULOS_PAISES).sum())
+for col in columnas_analisis:
+    es_numerica = col in columnas_numericas
+    pct_nulos = float(nulos_col[col])
 
-agregar_fila(resultados, "resumen_final", "dataset", "n_paises_finales", df["country_code"].nunique())
-agregar_fila(resultados, "resumen_final", "dataset", "n_variables_totales", len(df.columns))
-agregar_fila(resultados, "resumen_final", "dataset", "n_variables_analizadas", len(columnas_analisis))
-agregar_fila(resultados, "resumen_final", "dataset", "n_columnas_problematicas", n_columnas_problematicas)
-agregar_fila(resultados, "resumen_final", "dataset", "n_paises_problematicos", n_paises_problematicos)
-agregar_fila(resultados, "resumen_final", "dataset", "n_variables_numericas", len(columnas_numericas))
-# -------------------------
-# 8. OUTLIERS
-# -------------------------
-#Representación de outliers en boxplots
-outliers_resultados = calcular_outliers_iqr(df, columnas_numericas)
+    varianza = float(varianzas[col]) if es_numerica and col in varianzas.index and pd.notna(varianzas[col]) else np.nan
+    std = float(stds[col]) if es_numerica and col in stds.index and pd.notna(stds[col]) else np.nan
 
-for item in outliers_resultados:
-    variable = item["variable"]
-    agregar_fila(resultados, "outliers", "columna", f"{variable}_q1", item["q1"])
-    agregar_fila(resultados, "outliers", "columna", f"{variable}_q3", item["q3"])
-    agregar_fila(resultados, "outliers", "columna", f"{variable}_iqr", item["iqr"])
-    agregar_fila(resultados, "outliers", "columna", f"{variable}_limite_inferior", item["limite_inferior"])
-    agregar_fila(resultados, "outliers", "columna", f"{variable}_limite_superior", item["limite_superior"])
-    agregar_fila(resultados, "outliers", "columna", f"{variable}_n_outliers", item["n_outliers"])
-    agregar_fila(resultados, "outliers", "columna", f"{variable}_pct_outliers", item["pct_outliers"])
+    n_outliers = outliers_info[col]["n_outliers"] if es_numerica else np.nan
+    pct_outliers = outliers_info[col]["pct_outliers"] if es_numerica else np.nan
 
-# -------------------------
-# 9. RESUMEN FINAL
-# -------------------------
-n_columnas_problematicas = int((nulos_col >= UMBRAL_NULOS_COLUMNAS).sum())
-n_paises_problematicos = int((nulos_pais >= UMBRAL_NULOS_PAISES).sum())
-n_variables_con_outliers = sum(1 for item in outliers_resultados if item["n_outliers"] > 0)
-#Resumen de resultados calculados
-agregar_fila(resultados, "resumen_final", "dataset", "n_paises_finales", df["country_code"].nunique())
-agregar_fila(resultados, "resumen_final", "dataset", "n_variables_totales", len(df.columns))
-agregar_fila(resultados, "resumen_final", "dataset", "n_variables_analizadas", len(columnas_analisis))
-agregar_fila(resultados, "resumen_final", "dataset", "n_columnas_problematicas", n_columnas_problematicas)
-agregar_fila(resultados, "resumen_final", "dataset", "n_paises_problematicos", n_paises_problematicos)
-agregar_fila(resultados, "resumen_final", "dataset", "n_variables_numericas", len(columnas_numericas))
+    correlacion_alta = col in variables_con_corr_alta if es_numerica else False
+    baja_varianza = pd.notna(varianza) and varianza <= UMBRAL_VARIANZA_BAJA
 
-# =========================================================
-# GUARDAR EN CSV
-# =========================================================
-df_resultados = pd.DataFrame(resultados)
+    motivo = []
+    if pct_nulos > UMBRAL_NULOS_COLUMNAS:
+        motivo.append(f"nulos>{UMBRAL_NULOS_COLUMNAS}%")
+    if baja_varianza:
+        motivo.append("baja_varianza")
+    if correlacion_alta:
+        motivo.append("correlacion_alta")
 
-df_resultados = df_resultados.sort_values(
-    by=["tipo_analisis", "grupo", "variable"]
-).reset_index(drop=True)
+    resumen_variables.append({
+        "variable": col,
+        "tipo": "numerica" if es_numerica else "no_numerica",
+        "pct_nulos": round(pct_nulos, 2),
+        "varianza": round(varianza, 6) if pd.notna(varianza) else np.nan,
+        "std": round(std, 6) if pd.notna(std) else np.nan,
+        "n_outliers": n_outliers,
+        "pct_outliers": pct_outliers,
+        "correlacion_alta": correlacion_alta,
+        "motivo": "; ".join(motivo) if motivo else "sin_problemas_graves"
+    })
 
-df_resultados.to_csv(RUTA_CSV_FINAL, index=False, encoding="utf-8-sig")
+df_resumen_variables = pd.DataFrame(resumen_variables).sort_values(
+    by=["pct_nulos", "variable"],
+    ascending=[False, True]
+)
+
+# GUARDAR CSV
+df_resumen_variables.to_csv(RUTA_RESUMEN_VARIABLES, index=False, encoding="utf-8-sig")
+df_paises.to_csv(RUTA_RESUMEN_PAISES, index=False, encoding="utf-8-sig")
+df_corr_altas.to_csv(RUTA_CORRELACIONES, index=False, encoding="utf-8-sig")
 
 print("\n" + "=" * 70)
 print("ANÁLISIS DE CALIDAD FINALIZADO")
-print(f"CSV único generado en: {RUTA_CSV_FINAL}")
+print(f"Resumen de variables: {RUTA_RESUMEN_VARIABLES}")
+print(f"Resumen de países:    {RUTA_RESUMEN_PAISES}")
+print(f"Correlaciones altas:  {RUTA_CORRELACIONES}")
 print("=" * 70)
 
-# =========================================================
-# GRÁFICOS
-# =========================================================
-
-# Top países con más nulos
-serie_paises = pd.Series(nulos_pais.values, index=df["country_code"]).sort_values(ascending=False)
-guardar_grafico_barras(
-    serie_paises,
-    "Top países con mayor porcentaje de nulos",
-    "País",
-    "% de nulos",
-    "top_paises_mas_nulos.png",
-    top_n=20
-)
-
-# Top columnas con más nulos
+# GRÁFICOS NECESARIOS
+# 1. Top variables con más nulos
 serie_columnas = nulos_col.sort_values(ascending=False)
 guardar_grafico_barras(
-    serie_columnas,
-    "Top variables con mayor porcentaje de nulos",
-    "Variable",
-    "% de nulos",
-    "top_columnas_mas_nulas.png",
+    serie=serie_columnas,
+    titulo="Top variables con mayor porcentaje de nulos",
+    xlabel="Variable",
+    ylabel="% de nulos",
+    ruta_archivo=os.path.join(RUTA_SALIDA, "top_variables_mas_nulas.png"),
     top_n=20
 )
+# 2. Top países con más nulos
+serie_paises = pd.Series(nulos_pais.values, index=df["country_code"]).sort_values(ascending=False)
+guardar_grafico_barras(
+    serie=serie_paises,
+    titulo="Top países con mayor porcentaje de nulos",
+    xlabel="País",
+    ylabel="% de nulos",
+    ruta_archivo=os.path.join(RUTA_SALIDA, "top_paises_mas_nulos.png"),
+    top_n=20
+)
+# 3. Mapa de calor de nulos
+plt.figure(figsize=(18, 10))
+matriz_nulos = df[columnas_analisis].isnull().astype(int)
 
-# Histogramas de variables numéricas
-ruta_hist = os.path.join(RUTA_SALIDA, "Histogramas")
-os.makedirs(ruta_hist, exist_ok=True)
+plt.imshow(matriz_nulos, aspect="auto")
+plt.colorbar(label="Nulos (1 = sí, 0 = no)")
+plt.title("Heatmap de valores nulos")
+plt.xlabel("Variables")
+plt.ylabel("Países")
+plt.xticks(range(len(columnas_analisis)), columnas_analisis, rotation=90)
+plt.yticks([])
+plt.tight_layout()
 
-for col in columnas_numericas:
-    serie = df[col].dropna()
+ruta_heatmap = os.path.join(RUTA_SALIDA, "heatmap_nulos.png")
+plt.savefig(ruta_heatmap, dpi=300, bbox_inches="tight")
+plt.close()
+print(f"Gráfico guardado: {ruta_heatmap}")
 
-    if len(serie) == 0:
-        continue
-
-    plt.figure(figsize=(10, 6))
-    plt.hist(serie, bins=20)
-    plt.title(f"Histograma - {col}")
-    plt.xlabel(col)
-    plt.ylabel("Frecuencia")
-    plt.tight_layout()
-
-    ruta_archivo = os.path.join(ruta_hist, f"hist_{col}.png")
-    plt.savefig(ruta_archivo, dpi=300, bbox_inches="tight")
-    plt.close()
-    print(f"Gráfico guardado: {ruta_archivo}")
-
-# Boxplots de variables numéricas
-ruta_box = os.path.join(RUTA_SALIDA, "Boxplots")
-os.makedirs(ruta_box, exist_ok=True)
-
-for col in columnas_numericas:
-    serie = df[col].dropna()
-
-    if len(serie) == 0:
-        continue
-
-    plt.figure(figsize=(8, 6))
-    plt.boxplot(serie, vert=True)
-    plt.title(f"Boxplot - {col}")
-    plt.ylabel(col)
-    plt.tight_layout()
-
-    ruta_archivo = os.path.join(ruta_box, f"boxplot_{col}.png")
-    plt.savefig(ruta_archivo, dpi=300, bbox_inches="tight")
-    plt.close()
-    print(f"Gráfico guardado: {ruta_archivo}")
-
-# Matriz de correlación solo en gráfico
+# 4. Matriz de correlación solo para variables numéricas
 if len(columnas_numericas) >= 2:
-    corr = df[columnas_numericas].corr(numeric_only=True)
+    corr = df[columnas_numericas].corr()
 
     plt.figure(figsize=(16, 12))
     plt.imshow(corr, aspect="auto")
@@ -349,26 +271,34 @@ if len(columnas_numericas) >= 2:
     plt.close()
     print(f"Gráfico guardado: {ruta_corr}")
 
-# Heatmap de valores nulos
-plt.figure(figsize=(18, 10))
+# 5. Histogramas y boxplots solo de variables numéricas
+ruta_hist = os.path.join(RUTA_SALIDA, "Histogramas")
+ruta_box = os.path.join(RUTA_SALIDA, "Boxplots")
+os.makedirs(ruta_hist, exist_ok=True)
+os.makedirs(ruta_box, exist_ok=True)
 
-# Convertimos a 0 y 1 (1 = nulo)
-matriz_nulos = df.isnull().astype(int)
+for col in columnas_numericas:
+    serie = df[col].dropna()
+    if len(serie) == 0:
+        continue
 
-plt.imshow(matriz_nulos, aspect="auto")
-plt.colorbar(label="Nulos (1 = sí, 0 = no)")
+    plt.figure(figsize=(10, 6))
+    plt.hist(serie, bins=20)
+    plt.title(f"Histograma - {col}")
+    plt.xlabel(col)
+    plt.ylabel("Frecuencia")
+    plt.tight_layout()
+    ruta_archivo_hist = os.path.join(ruta_hist, f"hist_{col}.png")
+    plt.savefig(ruta_archivo_hist, dpi=300, bbox_inches="tight")
+    plt.close()
 
-plt.title("Heatmap de valores nulos")
-plt.xlabel("Variables")
-plt.ylabel("Países")
+    plt.figure(figsize=(8, 6))
+    plt.boxplot(serie, vert=True)
+    plt.title(f"Boxplot - {col}")
+    plt.ylabel(col)
+    plt.tight_layout()
+    ruta_archivo_box = os.path.join(ruta_box, f"boxplot_{col}.png")
+    plt.savefig(ruta_archivo_box, dpi=300, bbox_inches="tight")
+    plt.close()
 
-plt.xticks(range(len(df.columns)), df.columns, rotation=90)
-plt.yticks([])  # quitamos países para que no se sature
-
-plt.tight_layout()
-
-ruta_heatmap = os.path.join(RUTA_SALIDA, "heatmap_nulos.png")
-plt.savefig(ruta_heatmap, dpi=300, bbox_inches="tight")
-plt.close()
-
-print(f"Gráfico guardado: {ruta_heatmap}")
+print("\nProceso completado correctamente.")
