@@ -13,8 +13,8 @@ warnings.filterwarnings('ignore')
 
 # 0. CARGA DE DATOS
 # Crear carpetas de resultados si no existen
-os.makedirs('Dataset_Final/ResultadosAnalisis', exist_ok=True)
-os.makedirs('Analisis_Dato/ResultadosAnalisis', exist_ok=True)
+os.makedirs('Dataset_Final/ResultadosAnalisisExploratorio', exist_ok=True)
+os.makedirs('Analisis_Dato/ResultadosAnalisisExploratorio', exist_ok=True)
 # Dataset completo: para descriptivo y correlación
 df = pd.read_csv('Dataset_Final/dataset_limpio_2023.csv')
 
@@ -48,7 +48,7 @@ sns.heatmap(
 )
 plt.title('Matriz de Correlación entre Variables', fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig('Analisis_Dato/ResultadosAnalisis/correlacion.png', dpi=150)
+plt.savefig('Analisis_Dato/ResultadosAnalisisExploratorio/correlacion.png', dpi=150)
 plt.close()
 print("\nGráfico de correlación guardado: correlacion.png")
 
@@ -87,7 +87,7 @@ plt.ylabel('Tasa de Logro Educativo (%)', fontsize=12)
 plt.title('Electrificación vs Logro Educativo', fontsize=14, fontweight='bold')
 plt.legend()
 plt.tight_layout()
-plt.savefig('Analisis_Dato/ResultadosAnalisis/scatter_elec_attainment.png', dpi=150)
+plt.savefig('Analisis_Dato/ResultadosAnalisisExploratorio/scatter_elec_attainment.png', dpi=150)
 plt.close()
 print("Gráfico scatter guardado: scatter_elec_attainment.png")
 
@@ -136,7 +136,7 @@ ax.set_ylim(0, 105)
 ax.set_xticks(range(1, len(varianza_acumulada) + 1))
 ax.legend()
 plt.tight_layout()
-plt.savefig('Analisis_Dato/ResultadosAnalisis/pca_varianza_explicada.png', dpi=150)
+plt.savefig('Analisis_Dato/ResultadosAnalisisExploratorio/pca_varianza_explicada.png', dpi=150)
 plt.close()
 
 # Ajuste final con las componentes seleccionadas
@@ -163,12 +163,12 @@ sns.heatmap(
 )
 plt.title('Cargas de Componentes Principales (Loadings)', fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig('Analisis_Dato/ResultadosAnalisis/pca_loadings.png', dpi=150)
+plt.savefig('Analisis_Dato/ResultadosAnalisisExploratorio/pca_loadings.png', dpi=150)
 plt.close()
 print("Heatmap de cargas guardado: pca_loadings.png")
 
 # Guardar tabla de loadings como CSV
-loadings.round(3).to_csv('Analisis_Dato/ResultadosAnalisis/pca_loadings.csv', encoding='utf-8-sig', sep=';', decimal=',')
+loadings.round(3).to_csv('Analisis_Dato/ResultadosAnalisisExploratorio/pca_loadings.csv', encoding='utf-8-sig', sep=';', decimal=',')
 print("Tabla de loadings guardada: pca_loadings.csv")
 
 # 4. CLUSTERIZACIÓN JERÁRQUICA
@@ -186,7 +186,7 @@ plt.title('Dendrograma — Clusterización Jerárquica', fontsize=14, fontweight
 plt.xlabel('País', fontsize=11)
 plt.ylabel('Distancia', fontsize=11)
 plt.tight_layout()
-plt.savefig('Analisis_Dato/ResultadosAnalisis/dendrograma.png', dpi=150)
+plt.savefig('Analisis_Dato/ResultadosAnalisisExploratorio/dendrograma.png', dpi=150)
 plt.close()
 print("\nDendrograma guardado: dendrograma.png")
 
@@ -205,7 +205,7 @@ plt.xlabel('Número de Clusters (k)', fontsize=12)
 plt.ylabel('SSE', fontsize=12)
 plt.title('Método del Codo — K-Means', fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig('Analisis_Dato/ResultadosAnalisis/kmeans_codo.png', dpi=150)
+plt.savefig('Analisis_Dato/ResultadosAnalisisExploratorio/kmeans_codo.png', dpi=150)
 plt.close()
 print("Método del codo guardado: kmeans_codo.png")
 
@@ -230,7 +230,7 @@ plt.ylabel('PC2', fontsize=12)
 plt.title('Clusters de Países — K-Means (espacio PCA)', fontsize=14, fontweight='bold')
 plt.legend()
 plt.tight_layout()
-plt.savefig('Analisis_Dato/ResultadosAnalisis/kmeans_clusters.png', dpi=150)
+plt.savefig('Analisis_Dato/ResultadosAnalisisExploratorio/kmeans_clusters.png', dpi=150)
 plt.close()
 print("Gráfico de clusters guardado: kmeans_clusters.png")
 
