@@ -234,4 +234,101 @@ plt.savefig('Analisis_Dato/ResultadosAnalisisExploratorio/kmeans_clusters.png', 
 plt.close()
 print("Gráfico de clusters guardado: kmeans_clusters.png")
 
-print("\n✓ Bloque exploratorio completado.")
+# 6. ANÁLISIS DE PERFILES DE CLUSTERS
+# Variables clave para interpretar los clusters
+# seleccionadas según su relevancia en PC1 y PC2
+variables_perfil = [
+    'elec_electricity_access_total',
+    'elec_electricity_access_rural',
+    'edu_educational_attainment_rate',
+    'edu_primary_completion_rate',
+    'edu_school_enrollment_secondary',
+    'edu_out_of_school_children_female',
+    'edu_out_of_school_children_male',
+    'des_gdp_per_capita',
+    'des_tasa_mortalidad_infantil',
+    'des_tasa_natalidad',
+]
+
+# Perfil medio de cada cluster
+perfil = df_pca.groupby('cluster')[variables_perfil].mean().round(2)
+perfil.index = [f'Cluster {i}' for i in perfil.index]
+
+print("\n=== PERFIL MEDIO DE CADA CLUSTER ===")
+print(perfil.T.to_string())
+
+perfil.T.to_csv(
+    'Analisis_Dato/ResultadosAnalisisExploratorio/perfil_clusters.csv',
+    encoding='utf-8-sig', sep=';', decimal=','
+)
+print("Tabla de perfiles guardada: perfil_clusters.csv")
+
+# Países de cada cluster
+print("\n=== PAÍSES POR CLUSTER ===")
+for c in sorted(df_pca['cluster'].unique()):
+    paises = df_pca[df_pca['cluster'] == c]['country_code'].tolist()
+    print(f"\nCluster {c} ({len(paises)} países):")
+    print(', '.join(paises))
+
+# Guardar tabla de países por cluster
+df_pca[['country_code', 'cluster']].sort_values(
+    ['cluster', 'country_code']
+).to_csv(
+    'Analisis_Dato/ResultadosAnalisisExploratorio/paises_por_cluster.csv',
+    index=False, encoding='utf-8-sig', sep=';'
+)
+print("\nTabla de países guardada: paises_por_cluster.csv")
+
+# Gráfico de barras comparativo por variable y cluster
+fig, axes = plt.subplots(2, 5, figsize=(18, 8))
+axes = axes.flatten()
+colores = ['steelblue', 'tomato', 'seagreen', 'darkorange']
+
+for i, var in enumerate(variables_perfil):
+    valores = [perfil.loc[f'Cluster {c}', var]
+               for c in sorted(df_pca['cluster'].unique())]
+    bars = axes[i].bar(
+        [f'C{c}' for c in sorted(df_pca['cluster'].unique())],
+        valores, color=colores
+    )
+    axes[i].set_title(var.replace('_', '\n'), fontsize=8, fontweight='bold')
+    for bar, val in zip(bars, valores):
+        axes[i].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + max(valores) * 0.02,
+            f'{val:.1f}', ha='center', va='bottom', fontsize=7
+        )
+
+plt.suptitle('Perfil Comparativo de Clusters', fontsize=14,
+             fontweight='bold', y=1.02)
+plt.tight_layout()
+plt.savefig('Analisis_Dato/ResultadosAnalisisExploratorio/perfil_clusters.png',
+            dpi=150, bbox_inches='tight')
+plt.close()
+print("Gráfico de perfiles guardado: perfil_clusters.png")
+
+# Scatter electrificación vs logro educativo coloreado por cluster
+par = df_pca[['elec_electricity_access_total',
+              'edu_educational_attainment_rate',
+              'cluster']].copy()
+
+plt.figure(figsize=(9, 6))
+for c in sorted(df_pca['cluster'].unique()):
+    mask = par['cluster'] == c
+    plt.scatter(
+        par.loc[mask, 'elec_electricity_access_total'],
+        par.loc[mask, 'edu_educational_attainment_rate'],
+        label=f'Cluster {c}', alpha=0.7,
+        color=colores[c], edgecolors='white', linewidth=0.5, s=60
+    )
+plt.xlabel('Acceso a Electricidad Total (%)', fontsize=12)
+plt.ylabel('Tasa de Logro Educativo (%)', fontsize=12)
+plt.title('Electrificación vs Logro Educativo por Cluster',
+          fontsize=14, fontweight='bold')
+plt.legend()
+plt.tight_layout()
+plt.savefig('Analisis_Dato/ResultadosAnalisisExploratorio/scatter_clusters.png', dpi=150)
+plt.close()
+print("Scatter por clusters guardado: scatter_clusters.png")
+
+print("\nBloque exploratorio completado.")
