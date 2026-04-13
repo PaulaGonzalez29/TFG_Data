@@ -2,18 +2,19 @@ import pandas as pd
 import os
 import numpy as np
 
-# =========================================================
+
 # RUTAS
-# =========================================================
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 RUTA_2023 = os.path.join(BASE_DIR, "Dataset_Final", "dataset_transversal_2023.csv")
 RUTA_UNIFICADO = os.path.join(BASE_DIR, "Dataset_Final", "dataset_unificado.csv")
 RUTA_SALIDA = os.path.join(BASE_DIR, "Dataset_Final", "dataset_limpio_2023.csv")
+RUTA_SALIDA_PCA = os.path.join(BASE_DIR, "Dataset_Final", "dataset_pca_2023.csv")
 
-# =========================================================
+
 # VARIABLES Y PAÍSES A ELIMINAR
-# =========================================================
+
 variables_eliminar = [
     "edu_literacy_rate",
     "des_tasa_pobreza",
@@ -26,9 +27,9 @@ paises_eliminar = [
     "PRK", "CHI", "FRO", "GRL", "PYF"
 ]
 
-# =========================================================
+
 # FUNCIÓN 1: ÚLTIMO VALOR DISPONIBLE HASTA 2023
-# =========================================================
+
 def obtener_ultimo_valor(df_historico_pais, variable):
     """
     Devuelve el último valor no nulo disponible de una variable
@@ -44,9 +45,9 @@ def obtener_ultimo_valor(df_historico_pais, variable):
     serie = serie.sort_values("year")
     return serie.iloc[-1][variable]
 
-# =========================================================
+
 # FUNCIÓN 2: VALOR DE 2024
-# =========================================================
+
 def obtener_valor_2024(df_historico_pais, variable):
     """
     Devuelve el valor de una variable en 2024 para un país,
@@ -62,17 +63,17 @@ def obtener_valor_2024(df_historico_pais, variable):
 
     return serie_2024.iloc[0][variable]
 
-# =========================================================
+
 # CARGA DE DATOS
-# =========================================================
+
 df_2023 = pd.read_csv(RUTA_2023)
 df_unificado = pd.read_csv(RUTA_UNIFICADO)
 
 print("Dimensión original dataset 2023:", df_2023.shape)
 
-# =========================================================
+
 # LIMPIEZA INICIAL
-# =========================================================
+
 df_2023 = df_2023.drop(columns=variables_eliminar, errors="ignore")
 df_unificado = df_unificado.drop(columns=variables_eliminar, errors="ignore")
 
@@ -81,23 +82,22 @@ df_unificado = df_unificado[~df_unificado["country_code"].isin(paises_eliminar)]
 
 print("Dimensión tras eliminar variables y países:", df_2023.shape)
 
-# =========================================================
+
 # COLUMNAS NUMÉRICAS
-# =========================================================
+
 columnas_numericas = df_2023.select_dtypes(include="number").columns.tolist()
 
 if "year" in columnas_numericas:
     columnas_numericas.remove("year")
-
-# =========================================================
+    
 # CONTAR NULOS ANTES
-# =========================================================
+
 nulos_antes = df_2023[columnas_numericas].isnull().sum().sum()
 print("Nulos antes de rellenar:", nulos_antes)
 
-# =========================================================
+
 # PASO 1: RELLENAR CON EL ÚLTIMO VALOR DISPONIBLE HASTA 2023
-# =========================================================
+
 rellenados_hasta_2023 = 0
 
 for idx in df_2023.index:
@@ -111,10 +111,9 @@ for idx in df_2023.index:
             if pd.notnull(valor):
                 df_2023.at[idx, col] = valor
                 rellenados_hasta_2023 += 1
-
-# =========================================================
+            
 # PASO 2: SI SIGUE NULO, INTENTAR CON 2024
-# =========================================================
+
 rellenados_2024 = 0
 
 for idx in df_2023.index:
@@ -128,10 +127,9 @@ for idx in df_2023.index:
             if pd.notnull(valor_2024):
                 df_2023.at[idx, col] = valor_2024
                 rellenados_2024 += 1
-
-# =========================================================
+                
 # CONTAR NULOS DESPUÉS
-# =========================================================
+
 nulos_despues = df_2023[columnas_numericas].isnull().sum().sum()
 rellenados_totales = rellenados_hasta_2023 + rellenados_2024
 
@@ -140,9 +138,52 @@ print("Valores rellenados con histórico hasta 2023:", rellenados_hasta_2023)
 print("Valores rellenados con dato de 2024:", rellenados_2024)
 print("Valores rellenados totales:", rellenados_totales)
 
-# =========================================================
+# PASO 3: PREPARACIÓN DE DATASET PARA PCA
+# Se excluyen las variables con más del 15% de nulos
+UMBRAL_NULOS_PCA = 0.15
+ 
+n_paises = len(df_2023)
+pct_nulos = df_2023[columnas_numericas].isnull().sum() / n_paises
+ 
+variables_excluidas_pca = pct_nulos[pct_nulos > UMBRAL_NULOS_PCA].index.tolist()
+variables_incluidas_pca = pct_nulos[pct_nulos <= UMBRAL_NULOS_PCA].index.tolist()
+ 
+print("\n" + "=" * 55)
+print("PASO 3: SELECCIÓN DE VARIABLES PARA PCA")
+print("=" * 55)
+print(f"Umbral de nulos estructurales: {int(UMBRAL_NULOS_PCA * 100)}%")
+print(f"\nVariables EXCLUIDAS del PCA ({len(variables_excluidas_pca)}):")
+for v in variables_excluidas_pca:
+    print(f"  - {v}  ({pct_nulos[v]*100:.1f}% nulos)")
+ 
+print(f"\nVariables INCLUIDAS en el PCA ({len(variables_incluidas_pca)}):")
+for v in variables_incluidas_pca:
+    print(f"  - {v}  ({pct_nulos[v]*100:.1f}% nulos)")
+ 
+# Los nulos residuales de las variables incluidas (< 15%) se
+# imputan con la mediana de cada variable, ya que son casos
+# aislados y no sistemáticos, y su volumen no introduce sesgo
+# significativo en el PCA.
+df_pca = df_2023[["country_code", "year"] + variables_incluidas_pca].copy()
+ 
+for col in variables_incluidas_pca:
+    if df_pca[col].isnull().any():
+        mediana = df_pca[col].median()
+        df_pca[col] = df_pca[col].fillna(mediana)
+ 
+print(f"\nNulos residuales tras imputación con mediana: "
+      f"{df_pca[variables_incluidas_pca].isnull().sum().sum()}")
+print(f"Países incluidos en el dataset PCA: {len(df_pca)}")
+ 
+df_pca.to_csv(RUTA_SALIDA_PCA, index=False, encoding="utf-8-sig")
+ 
+print("\nDataset para PCA guardado en:")
+print(RUTA_SALIDA_PCA)
+print("Dimensión final dataset PCA:", df_pca.shape)
+
+
 # GUARDAR DATASET LIMPIO
-# =========================================================
+
 df_2023.to_csv(RUTA_SALIDA, index=False, encoding="utf-8-sig")
 
 print("\nDataset limpio guardado en:")

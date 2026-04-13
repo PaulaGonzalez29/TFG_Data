@@ -1,16 +1,16 @@
 import pandas as pd
 import unicodedata
 
-# =========================
+
 # RUTAS DE ENTRADA / SALIDA
-# =========================
+
 INPUT_HDI = "Datos TFG/Desarrollo/Human Develop Index HDI.csv"
 INPUT_PAISES = "Datos TFG/Listado_paises.csv"
 OUTPUT_CSV = "Datos TFG/Desarrollo/hdi_limpio.csv"
 
-# =========================
+
 # FUNCIONES AUXILIARES
-# =========================
+
 def normalizar_texto(texto: str) -> str:
     """
     Normaliza nombres de países para poder hacer el cruce aunque haya
@@ -39,9 +39,9 @@ def convertir_valor(valor):
     except ValueError:
         return None
 
-# =========================
-# 1) LEER LISTADO DE PAÍSES
-# =========================
+
+# LEER LISTADO DE PAÍSES
+
 paises = pd.read_csv(INPUT_PAISES, sep=";", encoding="utf-8")
 
 # Comprobación básica
@@ -50,22 +50,13 @@ faltan = columnas_esperadas_paises - set(paises.columns)
 if faltan:
     raise ValueError(f"En {INPUT_PAISES} faltan columnas obligatorias: {faltan}")
 
-# =========================
-# 2) LEER ARCHIVO HDI EN BRUTO
-# =========================
+
+# LEER ARCHIVO HDI EN BRUTO
+
 # Este CSV tiene varias filas de cabecera, por eso se lee sin header
 hdi_raw = pd.read_csv(INPUT_HDI, sep=";", header=None, encoding="utf-8")
 
 # La fila 4 contiene los años correctos:
-# col 1 = Country
-# col 2 = 1990
-# col 4 = 2000
-# col 6 = 2010
-# col 8 = 2015
-# col 10 = 2020
-# col 12 = 2021
-# col 14 = 2022
-# col 16 = 2023
 columnas_hdi = [1, 2, 4, 6, 8, 10, 12, 14, 16]
 nombres_columnas = ["country", "1990", "2000", "2010", "2015", "2020", "2021", "2022", "2023"]
 
@@ -83,9 +74,9 @@ for col in anios:
 # Conservar solo filas que tengan al menos un valor HDI
 hdi = hdi[hdi[anios].notna().any(axis=1)].copy()
 
-# =========================
-# 3) MAPEO DE NOMBRES ENTRE HDI Y LISTADO_PAISES
-# =========================
+
+# MAPEO DE NOMBRES ENTRE HDI Y LISTADO_PAISES
+
 # Aquí se resuelven diferencias de nombres entre ambos archivos
 alias_hdi_a_listado = {
     "Bolivia (Plurinational State of)": "Bolivia",
@@ -105,9 +96,9 @@ hdi["country_norm"] = hdi["country_match"].apply(normalizar_texto)
 # Crear nombre de cruce para listado_paises
 paises["country_norm"] = paises["name"].apply(normalizar_texto)
 
-# =========================
-# 4) UNIR CON ISO CODE
-# =========================
+
+# UNIR CON ISO CODE
+
 hdi = hdi.merge(
     paises[["country_norm", "country_code"]],
     on="country_norm",
@@ -123,12 +114,12 @@ if hdi["country_code"].isna().any() or (hdi["country_code"].astype(str).str.stri
     filas_problematicas = hdi[hdi["country_code"].isna() | (hdi["country_code"].astype(str).str.strip() == "")]
     raise ValueError(
         "Hay países sin código ISO después del cruce. Revisa estos países:\n"
-        + filas_problematicas["country"].to_string(index=False)
+        + filas_problematicas["country_code"].to_string(index=False)
     )
 
-# =========================
-# 5) PASAR A FORMATO LARGO
-# =========================
+
+# PASAR A FORMATO LARGO
+
 resultado = hdi.melt(
     id_vars=["country_code"],
     value_vars=anios,
@@ -146,17 +137,16 @@ resultado = resultado.rename(columns={"country_code": "iso_code"})
 resultado["year"] = resultado["year"].astype(int)
 resultado = resultado.sort_values(["iso_code", "year"]).reset_index(drop=True)
 
-# =========================
-# 6) GUARDAR CSV FINAL
-# =========================
+
+# GUARDAR CSV FINAL
+
 resultado.to_csv(OUTPUT_CSV, index=False, encoding="utf-8")
 
 print(f"CSV generado correctamente: {OUTPUT_CSV}")
 print(resultado.head(20))
 
-# =========================
-# 7) INFORMACIÓN ÚTIL OPCIONAL
-# =========================
+
+
 # Países del listado que no aparecen en el HDI
 paises_hdi_norm = set(hdi["country_norm"].unique())
 faltan_en_hdi = paises[~paises["country_norm"].isin(paises_hdi_norm)][["name", "country_code"]]

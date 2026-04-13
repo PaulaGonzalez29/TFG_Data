@@ -3,22 +3,21 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# =========================================================
+
 # RUTAS
-# =========================================================
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RUTA_DATASET = os.path.join(BASE_DIR, "Dataset_Final", "dataset_limpio_2023.csv")
 
-# =========================================================
+
 # CARGA DE DATOS
-# =========================================================
+
 df = pd.read_csv(RUTA_DATASET)
 
 print("Dimensión del dataset:", df.shape)
 
-# =========================================================
-# 1. VISIÓN GENERAL
-# =========================================================
+
+# VISIÓN GENERAL
 print("\nInformación general:")
 print(df.info())
 
@@ -28,9 +27,38 @@ print(df.head())
 print("\nEstadísticas básicas:")
 print(df.describe())
 
-# =========================================================
-# 2. VALIDACIÓN BÁSICA
-# =========================================================
+# ESTADÍSTICOS BÁSICOS
+columnas_numericas_stats = df.select_dtypes(include="number").columns.tolist()
+if "year" in columnas_numericas_stats:
+    columnas_numericas_stats.remove("year")
+
+resumen_estadisticos = []
+
+for col in columnas_numericas_stats:
+    serie = df[col].dropna()
+    resumen_estadisticos.append({
+        "variable":   col,
+        "n_validos":  int(serie.count()),
+        "pct_nulos":  round(df[col].isnull().mean() * 100, 2),
+        "media":      round(serie.mean(), 2),
+        "mediana":    round(serie.median(), 2),
+        "std":        round(serie.std(), 2),
+        "min":        round(serie.min(), 2),
+        "p25":        round(serie.quantile(0.25), 2),
+        "p75":        round(serie.quantile(0.75), 2),
+        "max":        round(serie.max(), 2),
+    })
+
+df_estadisticos = pd.DataFrame(resumen_estadisticos)
+
+RUTA_ESTADISTICOS = os.path.join(BASE_DIR, "Analisis_Calidad", "estadisticos_descriptivos.csv")
+os.makedirs(os.path.join(BASE_DIR, "Analisis_Calidad"), exist_ok=True)
+df_estadisticos.to_csv(RUTA_ESTADISTICOS, index=False, encoding="utf-8-sig")
+
+print("\nEstadísticos descriptivos exportados a:", RUTA_ESTADISTICOS)
+print(df_estadisticos.to_string())
+
+# VALIDACIÓN BÁSICA
 print("\n================ VALIDACIÓN BÁSICA ================\n")
 
 duplicados = df.duplicated().sum()
@@ -47,9 +75,8 @@ for col in columnas_electricidad:
         fuera_rango = df[(df[col] < 0) | (df[col] > 100)]
         print(f"Valores fuera de rango en {col}: {len(fuera_rango)}")
 
-# =========================================================
-# 3. VARIABLES RELEVANTES PARA LOS GRÁFICOS
-# =========================================================
+
+# VARIABLES RELEVANTES PARA LOS GRÁFICOS
 variables_graficos = [
     "elec_electricity_access_total",
     "elec_electricity_access_rural",
@@ -67,9 +94,7 @@ nombres_legibles = {
     "des_hdi": "Índice de Desarrollo Humano (HDI)"
 }
 
-# =========================================================
-# 4. HISTOGRAMAS (4 EN UNA MISMA HOJA)
-# =========================================================
+# HISTOGRAMAS
 if len(variables_graficos) > 0:
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
     axes = axes.flatten()
@@ -87,9 +112,8 @@ if len(variables_graficos) > 0:
     plt.tight_layout()
     plt.show()
 
-# =========================================================
-# 5. BOXPLOTS (4 EN UNA MISMA HOJA)
-# =========================================================
+
+# BOXPLOTS
 if len(variables_graficos) > 0:
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
     axes = axes.flatten()
@@ -106,9 +130,8 @@ if len(variables_graficos) > 0:
     plt.tight_layout()
     plt.show()
 
-# =========================================================
-# 6. MATRIZ DE CORRELACIÓN DE TODAS LAS VARIABLES NUMÉRICAS
-# =========================================================
+
+# MATRIZ DE CORRELACIÓN
 columnas_numericas = df.select_dtypes(include="number").columns.tolist()
 
 if "year" in columnas_numericas:
@@ -123,9 +146,8 @@ if len(columnas_numericas) > 1:
     plt.tight_layout()
     plt.show()
 
-# =========================================================
-# 7. SCATTER PLOTS (HASTA 4 EN UNA MISMA HOJA)
-# =========================================================
+
+# SCATTER PLOTS
 variables_scatter = [
     "elec_electricity_access_rural",
     "des_gdp_per_capita",
@@ -156,9 +178,7 @@ if "elec_electricity_access_total" in df.columns and len(variables_scatter) > 0:
     plt.tight_layout()
     plt.show()
 
-# =========================================================
-# 8. COMPARACIÓN POR GRUPOS DE HDI
-# =========================================================
+# COMPARACIÓN POR GRUPOS DE HDI
 if "des_hdi" in df.columns and "elec_electricity_access_total" in df.columns:
     df["grupo_hdi"] = pd.qcut(df["des_hdi"], 3, labels=["Bajo", "Medio", "Alto"])
 

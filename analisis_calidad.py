@@ -3,9 +3,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# =========================================================
+
 # CONFIGURACIÓN
-# =========================================================
+
 #Direcciones y nombres de datasets
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -24,9 +24,9 @@ UMBRAL_NULOS_PAISES = 70
 UMBRAL_VARIANZA_BAJA = 1e-6
 UMBRAL_CORRELACION_ALTA = 0.85
 
-# =========================================================
+
 # FUNCIONES AUXILIARES
-# =========================================================
+
 #Cálculo de outliers
 def calcular_outliers_iqr(serie: pd.Series) -> tuple[int, float]:
     serie = serie.dropna()
@@ -100,9 +100,9 @@ if duplicados_country > 0:
 
 print("Dimensión tras primera limpieza de posibles errores:", df.shape)
 
-# =========================================================
+
 # ANÁLISIS
-# =========================================================
+
 columnas_excluir = ["country_code", "year"]
 columnas_analisis = [c for c in df.columns if c not in columnas_excluir]
 

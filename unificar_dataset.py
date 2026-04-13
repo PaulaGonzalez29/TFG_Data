@@ -1,9 +1,9 @@
 import pandas as pd
 import os
 
-# =========================================================
+
 # RUTAS
-# =========================================================
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 RUTAS_POSIBLES = [
@@ -11,18 +11,18 @@ RUTAS_POSIBLES = [
     os.path.join(BASE_DIR, "Datos TFG")
 ]
 
-# =========================================================
+
 # ARCHIVOS DE ENTRADA
-# =========================================================
+
 archivos_datasets = {
     "dataset_educacion_unificado.csv": "educacion",
     "dataset_desarrollo_unificado.csv": "desarrollo",
     "dataset_electrificacion_unificado.csv": "electrificacion"
 }
 
-# =========================================================
+
 # REGIONES / AGREGADOS A EXCLUIR
-# =========================================================
+
 REGIONES_EXCLUIR = {
     "AFE", "AFW", "ARB", "CEB", "CSS", "EAP", "EAR", "EAS", "ECA", "ECS",
     "EMU", "EUU", "FCS", "HIC", "HPC", "IBD", "IBT", "IDA", "IDB", "IDX",
@@ -31,9 +31,9 @@ REGIONES_EXCLUIR = {
     "SST", "TEA", "TEC", "TLA", "TMN", "TSA", "TSS", "UMC", "WLD"
 }
 
-# =========================================================
+
 # FUNCIÓN PARA BUSCAR ARCHIVOS
-# =========================================================
+
 def buscar_archivo(nombre_archivo):
     for ruta_base in RUTAS_POSIBLES:
         ruta_completa = os.path.join(ruta_base, nombre_archivo)
@@ -41,9 +41,9 @@ def buscar_archivo(nombre_archivo):
             return ruta_completa
     return None
 
-# =========================================================
+
 # FUNCIÓN PARA LEER Y LIMPIAR CADA DATASET HISTÓRICO
-# =========================================================
+
 def leer_dataset_historico(ruta_archivo, nombre_dataset):
     df = pd.read_csv(ruta_archivo)
 
@@ -143,9 +143,9 @@ def leer_dataset_historico(ruta_archivo, nombre_dataset):
 
     return df
 
-# =========================================================
+
 # CARGAR DATASETS
-# =========================================================
+
 lista_dfs = []
 
 for archivo, nombre_dataset in archivos_datasets.items():
@@ -167,17 +167,17 @@ for archivo, nombre_dataset in archivos_datasets.items():
 if len(lista_dfs) == 0:
     raise ValueError("No se ha podido cargar ningún dataset.")
 
-# =========================================================
+
 # UNIFICAR DATASETS POR PAÍS Y AÑO
-# =========================================================
+
 df_final = lista_dfs[0]
 
 for df in lista_dfs[1:]:
     df_final = df_final.merge(df, on=["country_code", "year"], how="outer")
 
-# =========================================================
+
 # LIMPIEZA FINAL
-# =========================================================
+
 df_final = df_final.dropna(subset=["country_code", "year"])
 
 df_final["country_code"] = df_final["country_code"].astype(str).str.strip().str.upper()
@@ -198,9 +198,42 @@ df_final = df_final.drop_duplicates(subset=["country_code", "year"], keep="first
 # Ordenar
 df_final = df_final.sort_values(["country_code", "year"]).reset_index(drop=True)
 
-# =========================================================
+
+
+# ANÁLISIS DE CALIDAD POR AÑO (PARA ELECCIÓN DEL AÑO A FILTRAR)
+
+print("\n" + "="*60)
+print("ANÁLISIS DE CALIDAD POR AÑO")
+print("="*60)
+
+# 1. % de nulos por año
+nulos_por_anio = df_final.groupby("year").apply(
+    lambda x: (x.isnull().sum().sum() / x.size) * 100
+).round(2).reset_index()
+
+nulos_por_anio.columns = ["year", "pct_nulos"]
+
+# 2. Número de países por año
+paises_por_anio = df_final.groupby("year")["country_code"].nunique().reset_index()
+paises_por_anio.columns = ["year", "n_paises"]
+
+# 3. Unir ambos análisis
+analisis_anual = nulos_por_anio.merge(paises_por_anio, on="year")
+
+# Ordenar por año
+analisis_anual = analisis_anual.sort_values("year")
+
+print("\nResumen por año:")
+print(analisis_anual)
+
+# Guardar resultados
+ruta_analisis = os.path.join(BASE_DIR, "Analisis_Calidad", "analisis_por_anio.csv")
+os.makedirs(os.path.dirname(ruta_analisis), exist_ok=True)
+analisis_anual.to_csv(ruta_analisis, index=False)
+
+print(f"\nArchivo guardado en: {ruta_analisis}")
+
 # REVISIÓN FINAL
-# =========================================================
 print("\nPrimeras filas:")
 print(df_final.head())
 
@@ -219,9 +252,9 @@ print(df_final["country_code"].nunique())
 print("\nPorcentaje de nulos por columna:")
 print((df_final.isnull().mean() * 100).round(2).sort_values(ascending=False))
 
-# =========================================================
+
 # GUARDAR DATASET FINAL
-# =========================================================
+
 ruta_salida = os.path.join(BASE_DIR, "Dataset_Final")
 os.makedirs(ruta_salida, exist_ok=True)
 

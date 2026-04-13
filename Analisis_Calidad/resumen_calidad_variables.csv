@@ -1,0 +1,31 @@
+﻿variable,tipo,pct_nulos,varianza,std,n_outliers,pct_outliers,correlacion_alta,motivo
+edu_literacy_rate,numerica,86.67,180.218284,13.42454,2,6.67,True,nulos>40%; correlacion_alta
+des_tasa_pobreza,numerica,76.44,34.810058,5.900005,3,5.66,True,nulos>40%; correlacion_alta
+elec_private_investment_energy,numerica,76.44,2.794351628890755e+19,5286162718.73157,6,11.32,False,nulos>40%
+elec_gdp_per_unit_energy_use,numerica,68.89,53.675508,7.326357,3,4.29,False,nulos>40%
+elec_electricity_consumption,numerica,68.44,43389865.430134,6587.098408,5,7.04,False,nulos>40%
+des_hdi,numerica,62.22,0.021895,0.147969,0,0.0,True,nulos>40%; correlacion_alta
+edu_secondary_schools_internet,numerica,60.44,997.730697,31.586875,0,0.0,True,nulos>40%; correlacion_alta
+edu_primary_schools_internet,numerica,58.67,1378.411917,37.12697,0,0.0,True,nulos>40%; correlacion_alta
+edu_educational_attainment_rate,numerica,57.33,271.679887,16.482715,10,10.42,True,nulos>40%; correlacion_alta
+edu_lower_secondary_schools_electricity,numerica,56.89,465.502242,21.575501,17,17.53,True,nulos>40%; correlacion_alta
+edu_primary_schools_electricity,numerica,55.11,695.782319,26.377686,16,15.84,True,nulos>40%; correlacion_alta
+edu_upper_secondary_schools_electricity,numerica,55.11,295.795604,17.198709,13,12.87,False,nulos>40%
+edu_out_of_school_children_female,numerica,53.33,490884774440.3441,700631.696714,16,15.24,True,nulos>40%; correlacion_alta
+edu_out_of_school_children_male,numerica,53.33,371940505780.56775,609869.253021,16,15.24,True,nulos>40%; correlacion_alta
+edu_public_expenditure_education,numerica,46.22,4.789327,2.188453,2,1.65,False,nulos>40%
+edu_primary_completion_rate,numerica,40.89,219.791624,14.825371,15,11.28,False,nulos>40%
+edu_school_enrollment_secondary,numerica,36.89,630.782564,25.115385,12,8.45,True,correlacion_alta
+edu_school_enrollment_primary,numerica,28.44,207.069253,14.389901,17,10.56,False,sin_problemas_graves
+edu_years_free_primary_secondary,numerica,15.11,4.415376,2.10128,4,2.09,False,sin_problemas_graves
+des_tasa_mortalidad_infantil,numerica,12.89,279.141439,16.707526,3,1.53,True,correlacion_alta
+des_deflactor_inflacion_gdp,numerica,9.78,3846.587961,62.020867,37,18.23,False,sin_problemas_graves
+des_gdp_per_capita,numerica,9.78,1101478553.555323,33188.530452,14,6.9,False,sin_problemas_graves
+des_crecimiento_poblacion_rural,numerica,8.89,3.619908,1.902606,9,4.39,False,sin_problemas_graves
+elec_electricity_access_rural,numerica,7.11,929.572499,30.488891,41,19.62,True,correlacion_alta
+elec_electricity_access_urban,numerica,5.33,147.1746,12.131554,41,19.25,True,correlacion_alta
+edu_years_compulsory_education,numerica,4.89,9.223575,3.037034,14,6.54,False,sin_problemas_graves
+des_densidad_poblacion,numerica,4.44,4142750.785829,2035.374851,20,9.3,False,sin_problemas_graves
+elec_electricity_access_total,numerica,4.44,503.152707,22.431066,39,18.14,True,correlacion_alta
+des_poblacion_rural,numerica,3.56,5376526364786919.0,73324800.475603,23,10.6,False,sin_problemas_graves
+des_tasa_natalidad,numerica,3.56,92.297325,9.60715,0,0.0,True,correlacion_alta

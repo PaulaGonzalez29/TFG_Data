@@ -16,9 +16,9 @@ archivos_variables = {
     "hdi_limpio.csv": "hdi"
 }
 
-# --------------------------------------------------
+
 # LECTURA DE ARCHIVOS WORLD BANK
-# --------------------------------------------------
+
 def leer_desarrollo_wb(ruta_archivo, nombre_variable):
     df = None
 
@@ -70,9 +70,9 @@ def leer_desarrollo_wb(ruta_archivo, nombre_variable):
     return df
 
 
-# --------------------------------------------------
+
 # LECTURA DE HDI LIMPIO
-# --------------------------------------------------
+
 def leer_hdi_limpio(ruta_archivo, nombre_variable):
     configuraciones = [
         {"sep": ",", "encoding": "utf-8-sig"},
@@ -143,9 +143,9 @@ def leer_hdi_limpio(ruta_archivo, nombre_variable):
     return df
 
 
-# --------------------------------------------------
+
 # CARGA DE DATASETS
-# --------------------------------------------------
+
 lista_dfs = []
 
 for archivo, nombre_variable in archivos_variables.items():
@@ -171,18 +171,18 @@ if len(lista_dfs) == 0:
     raise ValueError("No se ha podido cargar ningún dataset.")
 
 
-# --------------------------------------------------
+
 # UNIÓN DE TODOS LOS DATASETS
-# --------------------------------------------------
+
 df_desarrollo = lista_dfs[0]
 
 for df in lista_dfs[1:]:
     df_desarrollo = df_desarrollo.merge(df, on=["country_code", "year"], how="outer")
 
 
-# --------------------------------------------------
+
 # LIMPIEZA FINAL
-# --------------------------------------------------
+
 df_desarrollo["country_code"] = df_desarrollo["country_code"].astype(str).str.strip().str.upper()
 df_desarrollo["year"] = pd.to_numeric(df_desarrollo["year"], errors="coerce")
 df_desarrollo = df_desarrollo.dropna(subset=["country_code", "year"])
@@ -192,9 +192,9 @@ df_desarrollo["year"] = df_desarrollo["year"].astype(int)
 df_desarrollo = df_desarrollo.sort_values(by=["country_code", "year"]).reset_index(drop=True)
 
 
-# --------------------------------------------------
+
 # REVISIÓN
-# --------------------------------------------------
+
 print("\nPrimeras filas:")
 print(df_desarrollo.head())
 
@@ -210,9 +210,9 @@ print("\nInformación general:")
 print(df_desarrollo.info())
 
 
-# --------------------------------------------------
+
 # GUARDAR RESULTADO
-# --------------------------------------------------
+
 salida = "dataset_desarrollo_unificado.csv"
 df_desarrollo.to_csv(salida, index=False, encoding="utf-8-sig")
 print(f"\nArchivo guardado como: {salida}")
